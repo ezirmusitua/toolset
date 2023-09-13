@@ -1,0 +1,7 @@
+[package]
+name = "package_ibooks_epub"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+zip = "0.6"
