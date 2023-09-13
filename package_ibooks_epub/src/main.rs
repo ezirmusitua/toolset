@@ -1,3 +1,4 @@
+use std::env;
 use std::fs::{self, DirEntry, File};
 use std::io::Write;
 use std::path::Path;
@@ -7,7 +8,7 @@ use zip::write::FileOptions;
 fn read_dir(path: &Path, predicate: fn(&DirEntry) -> bool) -> Result<Vec<DirEntry>, String> {
     let filename = path.file_name().unwrap().to_str().unwrap();
     if !path.is_dir() {
-        return Err(format!("{} not a directory", filename).to_string());
+        return Err(format!("{} 不是文件夹", filename).to_string());
     }
     let entries = match fs::read_dir(path) {
         Ok(e) => e,
@@ -32,8 +33,8 @@ fn ends_with_epub(entry: &DirEntry) -> bool {
 fn copy_original(from: &Path, to: &Path) {
     let filename = from.file_name().unwrap().to_str();
     match fs::copy(from, to) {
-        Ok(_) => println!("{} was copied", &filename.unwrap()),
-        Err(e) => println!("Error while copy: {}", e),
+        Ok(_) => println!("《{}》已复制", &filename.unwrap()),
+        Err(e) => println!("复制错误: {}", e),
     };
 }
 
@@ -64,7 +65,6 @@ fn write_zip_directory(
     path: &Path,
     folder: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("write zip directory {}", path.display());
     let options = FileOptions::default()
         .compression_method(zip::CompressionMethod::Stored)
         .unix_permissions(0o755);
@@ -81,7 +81,6 @@ fn write_zip_directory(
             prefix
         }
     };
-    println!("writing prefix, {}", prefix);
     let subs = read_dir(path, |_| true)?;
     for sub in subs {
         if sub.path().is_dir() {
@@ -94,11 +93,6 @@ fn write_zip_directory(
 }
 
 fn create_zip_archive(source: &Path, dest: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    println!(
-        "create zip archive {} -> {}",
-        source.display(),
-        dest.display()
-    );
     let file = File::create(dest)?;
     let mut zip = zip::ZipWriter::new(file);
     write_zip_directory(&mut zip, source, "")?;
@@ -107,12 +101,17 @@ fn create_zip_archive(source: &Path, dest: &Path) -> Result<(), Box<dyn std::err
 }
 
 fn main() {
-    let source = Path::new("books");
-    let dest = Path::new("packaged");
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 3 {
+        println!("用法: {} <source> <dest>, source 为 iBooks 中的 epub 文件，dest 为重新打包后保存的位置", args[0]);
+        exit(-1);
+    }
+    let source = Path::new(&args[1]);
+    let dest = Path::new(&args[2]);
     let entries = match read_dir(source, ends_with_epub) {
         Ok(v) => v,
         Err(e) => {
-            println!("Error: {}", e);
+            println!("错误: {}", e);
             exit(-1);
         }
     };
@@ -120,10 +119,10 @@ fn main() {
         let filetype = entry.file_type().unwrap();
         let filename = entry.file_name();
         if filetype.is_dir() {
-            match create_zip_archive(&entry.path(), &dest.join(filename)) {
-                Ok(_) => (),
-                Err(e) => println!("Error: {}", e),
-            }
+            match create_zip_archive(&entry.path(), &dest.join(&filename)) {
+                Ok(_) => println!("《{}》已打包", &filename.to_str().unwrap()),
+                Err(e) => println!("错误: {}", e),
+            };
         } else {
             copy_original(&entry.path(), &dest.join(filename));
         }
